@@ -21,11 +21,12 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace OpenQA.Selenium.Support.UI
 {
     /// <summary>
-    /// An implementation of the <see cref="IWait&lt;T&gt;"/> interface that may have its timeout and polling interval
+    /// An implementation of the <see cref="IWait&lt;T&gt;"/> and <see cref="IWaitAsync&lt;T&gt;"/> interface that may have its timeout and polling interval
     /// configured on the fly.
     /// </summary>
     /// <typeparam name="T">The type of object on which the wait it to be applied.</typeparam>
@@ -207,20 +208,132 @@ namespace OpenQA.Selenium.Support.UI
                     lastException = ex;
                 }
 
-                // Check the timeout after evaluating the function to ensure conditions
-                // with a zero timeout can succeed.
-                if (!this.clock.IsNowBefore(endTime))
-                {
-                    string timeoutMessage = string.Format(CultureInfo.InvariantCulture, "Timed out after {0} seconds", this.timeout.TotalSeconds);
-                    if (!string.IsNullOrEmpty(this.message))
-                    {
-                        timeoutMessage += ": " + this.message;
-                    }
-
-                    this.ThrowTimeoutException(timeoutMessage, lastException);
-                }
+                EvaluateTimeout(endTime, lastException);
 
                 Thread.Sleep(this.sleepInterval);
+            }
+        }
+
+        /// <summary>
+        /// Repeatedly applies this instance's input value to the given function until one of the following
+        /// occurs:
+        /// <para>
+        /// <list type="bullet">
+        /// <item>the function does not return null</item>
+        /// <item>the function throws an exception that is not in the list of ignored exception types</item>
+        /// <item>the timeout expires</item>
+        /// </list>
+        /// </para>
+        /// as an asynchronous operation.
+        /// </summary>
+        /// <typeparam name="TResult">The delegate's expected return type.</typeparam>
+        /// <param name="condition">A delegate taking an object of type T as its parameter, and returning a TResult.</param>
+        /// <param name="token">A cancellation token that can be used to cancel the wait.</param>
+        /// <exception cref="ArgumentNullException"><paramref name="condition"/> is null.</exception>
+        /// <exception cref="TaskCanceledException">The task has been canceled.</exception>
+        /// <exception cref="WebDriverTimeoutException">A timeout occurs.</exception>
+        /// <returns>The task object representing the asynchronous operation.</returns>
+        public virtual async Task<TResult> UntilAsync<TResult>(Func<T, TResult> condition, CancellationToken token = default) where TResult : class
+        {
+            if (condition == null)
+            {
+                throw new ArgumentNullException(nameof(condition), "condition cannot be null");
+            }
+
+            Exception lastException = null;
+            var endTime = this.clock.LaterBy(this.timeout);
+            while (true)
+            {
+                try
+                {
+                    var result = condition(this.input);
+                    if (result != null)
+                    {
+                        return result;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    if (!this.IsIgnoredException(ex))
+                    {
+                        throw;
+                    }
+
+                    lastException = ex;
+                }
+
+                EvaluateTimeout(endTime, lastException);
+
+                await Task.Delay(this.sleepInterval, token);
+            }
+        }
+
+        /// <summary>
+        /// Repeatedly applies this instance's input value to the given function until one of the following
+        /// occurs:
+        /// <para>
+        /// <list type="bullet">
+        /// <item>the function does not return false</item>
+        /// <item>the function throws an exception that is not in the list of ignored exception types</item>
+        /// <item>the timeout expires</item>
+        /// </list>
+        /// </para>
+        /// as an asynchronous operation.
+        /// </summary>
+        /// <param name="condition">A delegate taking an object of type T as its parameter, and returning a bool.</param>
+        /// <param name="token">A cancellation token that can be used to cancel the wait.</param>
+        /// <exception cref="ArgumentNullException"><paramref name="condition"/> is null.</exception>
+        /// <exception cref="TaskCanceledException">The task has been canceled.</exception>
+        /// <exception cref="WebDriverTimeoutException">A timeout occurs.</exception>
+        /// <returns>The task object representing the asynchronous operation.</returns>
+        public virtual async Task UntilAsync(Func<T, bool> condition, CancellationToken token = default)
+        {
+            if (condition == null)
+            {
+                throw new ArgumentNullException(nameof(condition), "condition cannot be null");
+            }
+
+            Exception lastException = null;
+            var endTime = this.clock.LaterBy(this.timeout);
+            while (true)
+            {
+                try
+                {
+                    if (condition(this.input))
+                    {
+                        return;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    if (!this.IsIgnoredException(ex))
+                    {
+                        throw;
+                    }
+
+                    lastException = ex;
+                }
+
+                EvaluateTimeout(endTime, lastException);
+
+                await Task.Delay(this.sleepInterval, token);
+            }
+        }
+
+        private void EvaluateTimeout(DateTime endTime, Exception lastException)
+        {
+            // Check the timeout after evaluating the function to ensure conditions
+            // with a zero timeout can succeed.
+            if (!this.clock.IsNowBefore(endTime))
+            {
+                string timeoutMessage = string.Format(CultureInfo.InvariantCulture, "Timed out after {0} seconds",
+                    this.timeout.TotalSeconds);
+                if (!string.IsNullOrEmpty(this.message))
+                {
+                    timeoutMessage += ": " + this.message;
+                }
+
+                this.ThrowTimeoutException(timeoutMessage, lastException);
             }
         }
 

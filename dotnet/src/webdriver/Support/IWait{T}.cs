@@ -17,6 +17,8 @@
 // </copyright>
 
 using System;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace OpenQA.Selenium.Support.UI
 {
@@ -57,5 +59,29 @@ namespace OpenQA.Selenium.Support.UI
         /// If TResult is an object, the method returns the object when the condition evaluates to a value other than <see langword="null"/>.</returns>
         /// <exception cref="ArgumentException">Thrown when TResult is not boolean or an object type.</exception>
         TResult Until<TResult>(Func<T, TResult> condition);
+
+        /// <summary>
+        /// Waits until a condition is not null or times out.
+        /// The method returns the object when the condition evaluates to a value other than &lt;see langword="null"/&gt;
+        /// </summary>
+        /// <typeparam name="TResult">The type of result to expect from the condition.</typeparam>
+        /// <param name="condition">A delegate taking a TSource as its parameter, and returning a TResult.</param>
+        /// <param name="token">A cancellation token that can be used to cancel the wait.</param>
+        /// <returns>The task object representing the asynchronous operation.</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="condition"/> is null.</exception>
+        /// <exception cref="TaskCanceledException">The task has been canceled.</exception>
+        /// <exception cref="WebDriverTimeoutException">A timeout occurs.</exception>
+        Task<TResult> UntilAsync<TResult>(Func<T, TResult> condition, CancellationToken token = default) where TResult : class;
+
+        /// <summary>
+        /// Waits until a condition is true or times out.
+        /// </summary>
+        /// <param name="condition">A delegate taking a TSource as its parameter, and returning a bool.</param>
+        /// <param name="token">A cancellation token that can be used to cancel the wait.</param>
+        /// <returns>The task object representing the asynchronous operation.</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="condition"/> is null.</exception>
+        /// <exception cref="TaskCanceledException">The task has been canceled.</exception>
+        /// <exception cref="WebDriverTimeoutException">A timeout occurs.</exception>
+        Task UntilAsync(Func<T, bool> condition, CancellationToken token = default);
     }
 }
